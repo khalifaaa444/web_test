@@ -3,456 +3,130 @@
 <head>
     <title>ESP32 BLE Beacon Monitor</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 10px 5px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        #deviceList {
-            margin: 20px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 10px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .device {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-        }
-        .device:hover {
-            background-color: #f0f0f0;
-        }
-        .device.selected {
-            background-color: #e3f2fd;
-        }
-        #dataDisplay {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
-            padding: 15px;
-            margin-top: 20px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            min-height: 100px;
-        }
-        .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-        }
-        .connected {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        .scanning {
-            background-color: #cce5ff;
-            color: #004085;
-        }
-        .manufacturer-data {
-            background-color: #e8f4fd;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-            overflow-x: auto;
-            font-family: monospace;
-        }
-        .rssi {
-            float: right;
-            font-weight: bold;
-            color: #666;
-        }
-        .device-name {
-            font-weight: bold;
-        }
-        .device-id {
-            font-size: 12px;
-            color: #666;
-        }
+        body { font-family: Arial; padding: 20px; max-width: 800px; margin: 0 auto; }
+        button { padding: 12px 24px; margin: 5px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        #output { border: 1px solid #ccc; padding: 15px; margin-top: 20px; white-space: pre-wrap; font-family: monospace; }
+        .device { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .device:hover { background: #f0f0f0; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>ESP32 BLE Beacon Monitor</h1>
-        
-        <div class="status disconnected" id="status">
-            Not connected
-        </div>
-        
-        <div>
-            <button id="scanBtn" onclick="startScan()">Start Scan</button>
-            <button id="stopBtn" onclick="stopScan()" disabled>Stop Scan</button>
-            <button id="clearBtn" onclick="clearLog()">Clear Log</button>
-        </div>
-        
-        <div id="deviceList">
-            <p>No devices found yet. Click "Start Scan" to begin.</p>
-        </div>
-        
-        <div id="selectedDeviceInfo" style="display: none;">
-            <h3>Selected Device:</h3>
-            <p><strong>Name:</strong> <span id="deviceName"></span></p>
-            <p><strong>ID:</strong> <span id="deviceId"></span></p>
-            <p><strong>RSSI:</strong> <span id="deviceRSSI"></span> dBm</p>
-        </div>
-        
-        <div id="dataDisplay">
-            Waiting for data...
-        </div>
-        
-        <div id="rawData" style="display: none;">
-            <h3>Raw Data:</h3>
-            <div class="manufacturer-data" id="manufacturerData"></div>
-        </div>
-        
-        <div id="log"></div>
+    <h1>ESP32 BLE Beacon Monitor</h1>
+    <p><strong>Note:</strong> This works in Chrome/Edge on desktop and Android.</p>
+    
+    <div>
+        <button onclick="startScan()" id="scanBtn">Start Scan</button>
+        <button onclick="stopScan()" id="stopBtn" disabled>Stop Scan</button>
     </div>
-
+    
+    <div id="deviceList" style="margin: 20px 0;">
+        <p>No devices found. Click "Start Scan".</p>
+    </div>
+    
+    <div id="output">Ready...</div>
+    
     <script>
-        // Global variables
-        let scanner = null;
         let selectedDevice = null;
-        let devices = new Map(); // Store found devices
-        let logEntries = [];
-        let isScanning = false;
         
-        // Check if Web Bluetooth is supported
-        if (!navigator.bluetooth) {
-            showError('Web Bluetooth is not supported in this browser. Try Chrome/Edge on desktop or Android.');
-        }
-        
-        // Helper functions
-        function log(message) {
-            const timestamp = new Date().toLocaleTimeString();
-            const logEntry = `[${timestamp}] ${message}`;
-            logEntries.push(logEntry);
-            
-            // Update log display (show last 10 entries)
-            const logDiv = document.getElementById('log');
-            logDiv.innerHTML = '<h3>Log:</h3>' + 
-                logEntries.slice(-10).reverse().map(entry => 
-                    `<div style="margin: 2px 0; padding: 2px; background: #f0f0f0; border-radius: 3px;">${entry}</div>`
-                ).join('');
-            
-            console.log(message);
-        }
-        
-        function showError(message) {
-            document.getElementById('status').innerHTML = message;
-            document.getElementById('status').className = 'status disconnected';
-            log(message);
-        }
-        
-        function clearLog() {
-            logEntries = [];
-            document.getElementById('log').innerHTML = '';
-        }
-        
-        function updateStatus(message, type = 'scanning') {
-            document.getElementById('status').innerHTML = message;
-            document.getElementById('status').className = `status ${type}`;
-        }
-        
-        // Start BLE scanning
         async function startScan() {
             try {
-                updateStatus('Scanning for BLE devices...', 'scanning');
                 document.getElementById('scanBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = false;
+                document.getElementById('output').textContent = 'Scanning...\n';
                 
-                log('Starting BLE scan...');
-                
-                // Request Bluetooth scanning with LEScan
-                scanner = await navigator.bluetooth.requestLEScan({
-                    acceptAllAdvertisements: true
+                // Request device with specific filters for ESP32
+                selectedDevice = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        {namePrefix: 'ESP32'},
+                        {namePrefix: 'ESP'}
+                    ],
+                    optionalServices: []
                 });
                 
-                log('BLE scan started successfully');
-                isScanning = true;
+                document.getElementById('output').textContent += 
+                    `Selected: ${selectedDevice.name || 'Unknown'}\n` +
+                    `ID: ${selectedDevice.id}\n\n`;
                 
-                // Listen for advertisement received events
-                navigator.bluetooth.addEventListener('advertisementreceived', onAdvertisementReceived);
+                // Listen for advertisements
+                selectedDevice.addEventListener('advertisementreceived', event => {
+                    displayAdvertisement(event);
+                });
                 
-                // Show scanning indicator
-                updateStatus(`Scanning... (Found ${devices.size} devices)`, 'scanning');
+                // Start watching advertisements
+                await selectedDevice.watchAdvertisements();
+                
+                document.getElementById('output').textContent += 
+                    'Now watching for advertisements...\n' +
+                    'Keep this tab open to receive data.\n';
+                
+                // Show device info
+                document.getElementById('deviceList').innerHTML = `
+                    <div class="device" style="background: #e8f5e8;">
+                        <strong>Connected to:</strong> ${selectedDevice.name || 'Unknown'}<br>
+                        <small>ID: ${selectedDevice.id}</small>
+                    </div>
+                `;
                 
             } catch (error) {
-                showError(`Error: ${error.message || error}`);
+                document.getElementById('output').textContent = 'Error: ' + error;
                 document.getElementById('scanBtn').disabled = false;
                 document.getElementById('stopBtn').disabled = true;
             }
         }
         
-        // Handle incoming advertisements
-        function onAdvertisementReceived(event) {
-            const device = event.device;
-            const deviceId = device.id;
+        function displayAdvertisement(event) {
+            const output = document.getElementById('output');
+            let text = `\n=== New Advertisement ===\n`;
+            text += `Time: ${new Date().toLocaleTimeString()}\n`;
+            text += `Device: ${event.device.name || 'Unknown'}\n`;
+            text += `RSSI: ${event.rssi} dBm\n`;
             
-            // Check if it's an ESP32 device
-            const deviceName = device.name || 'Unknown';
-            const isESP32Device = deviceName.includes('ESP32') || deviceName.includes('ESP');
-            
-            // Update device in map
-            devices.set(deviceId, {
-                id: deviceId,
-                name: deviceName,
-                rssi: event.rssi,
-                timestamp: Date.now(),
-                data: event
-            });
-            
-            // Update device list
-            updateDeviceList();
-            
-            // If this is an ESP32 device, try to decode its data
-            if (isESP32Device) {
-                decodeAdvertisementData(event);
-            }
-        }
-        
-        // Update the device list UI
-        function updateDeviceList() {
-            const deviceListDiv = document.getElementById('deviceList');
-            const devicesArray = Array.from(devices.values());
-            
-            // Sort by RSSI (strongest signal first)
-            devicesArray.sort((a, b) => b.rssi - a.rssi);
-            
-            // Remove old ESP32 devices (not seen for 10 seconds)
-            const now = Date.now();
-            for (const [id, device] of devices) {
-                if (now - device.timestamp > 10000) {
-                    devices.delete(id);
-                }
-            }
-            
-            if (devicesArray.length === 0) {
-                deviceListDiv.innerHTML = '<p>No devices found yet. Scanning...</p>';
-                return;
-            }
-            
-            let html = '<h3>Found Devices:</h3>';
-            
-            devicesArray.forEach(device => {
-                const isESP32 = device.name.includes('ESP32') || device.name.includes('ESP');
-                const deviceClass = isESP32 ? 'device esp32-device' : 'device';
-                const rssiClass = device.rssi > -50 ? 'good' : device.rssi > -70 ? 'fair' : 'poor';
-                
-                html += `
-                    <div class="${deviceClass}" onclick="selectDevice('${device.id}')">
-                        <div class="device-name">${device.name || 'Unnamed Device'}</div>
-                        <div class="device-id">ID: ${device.id.substring(0, 8)}...</div>
-                        <div class="rssi ${rssiClass}">${device.rssi} dBm</div>
-                        <div style="clear: both;"></div>
-                    </div>
-                `;
-            });
-            
-            deviceListDiv.innerHTML = html;
-            
-            // Update status with device count
-            updateStatus(`Scanning... (Found ${devicesArray.length} devices)`, 'scanning');
-        }
-        
-        // Select a device to monitor
-        function selectDevice(deviceId) {
-            const device = devices.get(deviceId);
-            if (!device) return;
-            
-            selectedDevice = device;
-            
-            // Update selected device info
-            document.getElementById('selectedDeviceInfo').style.display = 'block';
-            document.getElementById('deviceName').textContent = device.name || 'N/A';
-            document.getElementById('deviceId').textContent = device.id;
-            document.getElementById('deviceRSSI').textContent = device.rssi;
-            
-            // Highlight selected device
-            document.querySelectorAll('.device').forEach(div => {
-                div.classList.remove('selected');
-            });
-            
-            const selectedDiv = Array.from(document.querySelectorAll('.device')).find(div => 
-                div.onclick && div.onclick.toString().includes(deviceId)
-            );
-            
-            if (selectedDiv) {
-                selectedDiv.classList.add('selected');
-            }
-            
-            // Decode the advertisement data
-            decodeAdvertisementData(device.data);
-        }
-        
-        // Decode advertisement data from ESP32
-        function decodeAdvertisementData(event) {
-            try {
-                const dataDisplay = document.getElementById('dataDisplay');
-                
-                // Basic device info
-                let info = `Device: ${event.device.name || 'Unknown'}\n`;
-                info += `RSSI: ${event.rssi} dBm\n`;
-                info += `Tx Power: ${event.txPower !== undefined ? event.txPower + ' dBm' : 'N/A'}\n`;
-                
-                // Check for manufacturer data
-                if (event.manufacturerData && event.manufacturerData.size > 0) {
-                    info += '\n=== Manufacturer Data ===\n';
+            if (event.manufacturerData && event.manufacturerData.size > 0) {
+                text += `\nManufacturer Data:\n`;
+                event.manufacturerData.forEach((value, key) => {
+                    text += `  ID: 0x${key.toString(16).toUpperCase()}\n`;
                     
-                    event.manufacturerData.forEach((value, key) => {
-                        info += `Manufacturer ID: 0x${key.toString(16).toUpperCase()}\n`;
-                        
-                        // Try to decode as our custom struct
-                        if (value.byteLength >= 12) {
-                            try {
-                                const decoder = new DataView(value.buffer);
-                                
-                                // Extract based on our ESP32 struct
-                                const manufacturerId = decoder.getUint16(0, true);
-                                const deviceType = decoder.getUint8(2);
-                                const version = decoder.getUint8(3);
-                                const counter = decoder.getUint32(4, true);
-                                const temperature = decoder.getInt16(8, true) / 10.0;
-                                const humidity = decoder.getUint8(10);
-                                const status = decoder.getUint8(11);
-                                
-                                info += `Device Type: ${deviceType}\n`;
-                                info += `Version: ${version}\n`;
-                                info += `Counter: ${counter}\n`;
-                                info += `Temperature: ${temperature.toFixed(1)}°C\n`;
-                                info += `Humidity: ${humidity}%\n`;
-                                info += `Status: 0x${status.toString(16).toUpperCase()}\n`;
-                            } catch (e) {
-                                info += 'Could not decode structured data\n';
-                            }
+                    // Convert to hex string
+                    let hexStr = '';
+                    for (let i = 0; i < value.byteLength; i++) {
+                        hexStr += ('0' + value.getUint8(i).toString(16)).slice(-2) + ' ';
+                    }
+                    text += `  Hex: ${hexStr}\n`;
+                    
+                    // Try to decode as our custom struct
+                    if (value.byteLength >= 12) {
+                        try {
+                            const view = new DataView(value.buffer);
+                            const temp = view.getInt16(8, true) / 10.0;
+                            const humidity = view.getUint8(10);
+                            const counter = view.getUint32(4, true);
+                            text += `  Decoded: Temp=${temp}°C, Humidity=${humidity}%, Counter=${counter}\n`;
+                        } catch (e) {
+                            // Not our format, continue
                         }
-                        
-                        // Show raw hex
-                        info += 'Raw Hex: ';
-                        const hexArray = [];
-                        for (let i = 0; i < value.byteLength; i++) {
-                            hexArray.push(('0' + value.getUint8(i).toString(16)).slice(-2));
-                        }
-                        info += hexArray.join(' ') + '\n';
-                        
-                        // Show as ASCII if printable
-                        const asciiArray = [];
-                        for (let i = 0; i < value.byteLength; i++) {
-                            const char = value.getUint8(i);
-                            asciiArray.push(char >= 32 && char <= 126 ? String.fromCharCode(char) : '.');
-                        }
-                        info += 'ASCII: ' + asciiArray.join('') + '\n';
-                    });
-                }
-                
-                // Check for service data
-                if (event.serviceData && event.serviceData.size > 0) {
-                    info += '\n=== Service Data ===\n';
-                    event.serviceData.forEach((value, key) => {
-                        info += `Service UUID: ${key}\n`;
-                        info += 'Data: ' + new TextDecoder().decode(value) + '\n';
-                    });
-                }
-                
-                dataDisplay.textContent = info;
-                
-                // Show raw data section
-                document.getElementById('rawData').style.display = 'block';
-                
-                // Update raw data display
-                const rawDataDiv = document.getElementById('manufacturerData');
-                if (event.manufacturerData && event.manufacturerData.size > 0) {
-                    let rawHtml = '';
-                    event.manufacturerData.forEach((value, key) => {
-                        const hexArray = [];
-                        for (let i = 0; i < value.byteLength; i++) {
-                            hexArray.push(('0' + value.getUint8(i).toString(16)).slice(-2));
-                        }
-                        rawHtml += `<div>Manufacturer 0x${key.toString(16).toUpperCase()}: ${hexArray.join(' ')}</div>`;
-                    });
-                    rawDataDiv.innerHTML = rawHtml;
-                }
-                
-                // Log successful decode
-                log(`Received data from ${event.device.name || 'Unknown'}: RSSI=${event.rssi}dBm`);
-                
-            } catch (error) {
-                log(`Error decoding data: ${error}`);
+                    }
+                });
             }
+            
+            // Keep only last 10 advertisements
+            const lines = output.textContent.split('\n');
+            const newLines = text.split('\n');
+            const allLines = lines.concat(newLines);
+            if (allLines.length > 50) {
+                allLines.splice(0, allLines.length - 50);
+            }
+            output.textContent = allLines.join('\n');
         }
         
-        // Stop scanning
         function stopScan() {
-            if (scanner && scanner.stop) {
-                scanner.stop();
-                isScanning = false;
-                log('Scan stopped');
+            if (selectedDevice) {
+                selectedDevice.unwatchAdvertisements();
+                document.getElementById('output').textContent += '\nScan stopped.\n';
             }
-            
-            if (scanner) {
-                navigator.bluetooth.removeEventListener('advertisementreceived', onAdvertisementReceived);
-            }
-            
-            updateStatus('Scan stopped', 'disconnected');
             document.getElementById('scanBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         }
-        
-        // Update device list periodically to remove old devices
-        setInterval(() => {
-            if (isScanning) {
-                updateDeviceList();
-            }
-        }, 2000);
-        
-        // Auto-start scanning on page load (optional)
-        window.addEventListener('load', () => {
-            // Uncomment to auto-start scanning
-            // startScan();
-        });
-        
-        // Add CSS for RSSI indicators
-        const style = document.createElement('style');
-        style.textContent = `
-            .rssi.good { color: green; }
-            .rssi.fair { color: orange; }
-            .rssi.poor { color: red; }
-            .esp32-device { border-left: 4px solid #4CAF50; }
-        `;
-        document.head.appendChild(style);
     </script>
 </body>
 </html>
