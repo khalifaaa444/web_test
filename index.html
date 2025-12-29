@@ -1,167 +1,170 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ESP32 BLE Monitor - No Pairing</title>
+    <title>ESP32 BLE Broadcast Receiver</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            padding: 20px; 
-            max-width: 800px; 
-            margin: 0 auto; 
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
         }
-        button { 
-            padding: 12px 24px; 
-            margin: 5px; 
-            background: #4CAF50; 
-            color: white; 
-            border: none; 
-            border-radius: 5px; 
-            cursor: pointer; 
+        button {
+            padding: 15px 30px;
+            margin: 10px;
             font-size: 16px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
         }
-        button:disabled { 
-            background: #ccc; 
-            cursor: not-allowed; 
-        }
-        #output { 
-            border: 1px solid #ccc; 
-            padding: 15px; 
-            margin-top: 20px; 
-            white-space: pre-wrap; 
+        #log {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-top: 20px;
+            height: 400px;
+            overflow-y: auto;
             font-family: monospace;
             background: #f9f9f9;
-            min-height: 300px;
-            overflow-y: auto;
         }
-        .data-line { 
-            margin: 5px 0; 
-            padding: 5px; 
-            border-bottom: 1px solid #eee; 
+        .entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
         }
-        .timestamp { 
-            color: #666; 
-            font-size: 0.9em; 
+        .time {
+            color: #666;
+            font-size: 12px;
         }
-        .rssi { 
-            color: #0066cc; 
-            font-weight: bold; 
+        .data {
+            color: #2196F3;
+            font-weight: bold;
         }
-        .hex-data { 
-            color: #009900; 
-            font-family: monospace; 
+        .error {
+            color: #f44336;
+        }
+        .success {
+            color: #4CAF50;
         }
     </style>
 </head>
 <body>
-    <h1>ESP32 BLE Beacon Monitor</h1>
-    <p><strong>Note:</strong> This reads ESP32 advertisements WITHOUT pairing.</p>
-    <p>Device name should be: <strong>ESP32-Beacon</strong></p>
+    <h1>ESP32 BLE Broadcast Receiver</h1>
+    <p>Receives data from ESP32 without any connection/pairing.</p>
     
-    <div>
-        <button onclick="startScan()" id="scanBtn">Start Scan</button>
-        <button onclick="stopScan()" id="stopBtn" disabled>Stop Scan</button>
-        <button onclick="clearOutput()" id="clearBtn">Clear</button>
+    <button onclick="startScan()">Start Receiving Data</button>
+    <button onclick="stopScan()" id="stopBtn" disabled>Stop</button>
+    
+    <div id="status" style="margin: 15px 0; padding: 10px; background: #e3f2fd;">
+        Ready. Click "Start Receiving Data"
     </div>
     
-    <div id="status" style="margin: 10px 0; padding: 10px; background: #e8f5e9; border-radius: 5px;">
-        Ready to scan...
+    <h3>Received Data:</h3>
+    <div id="log">
+        No data received yet...
     </div>
     
-    <div id="output">Data will appear here...</div>
+    <div style="margin-top: 20px; padding: 10px; background: #fff8e1; border-left: 4px solid #ff9800;">
+        <strong>Note for Chrome Desktop:</strong> You may need to enable experimental features:
+        <ol>
+            <li>Go to: <code>chrome://flags/#enable-experimental-web-platform-features</code></li>
+            <li>Set to <strong>Enabled</strong></li>
+            <li>Restart Chrome</li>
+        </ol>
+    </div>
     
     <script>
-        let selectedDevice = null;
-        let isScanning = false;
+        let device = null;
         let advertisementCount = 0;
         
-        function updateStatus(message, type = 'info') {
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'entry';
+            
+            const time = new Date().toLocaleTimeString();
+            const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : '📡';
+            
+            entry.innerHTML = `
+                <span class="time">[${time}]</span> 
+                <span class="${type}">${icon} ${message}</span>
+            `;
+            
+            logDiv.prepend(entry);
+            
+            // Keep only last 30 entries
+            while (logDiv.children.length > 30) {
+                logDiv.removeChild(logDiv.lastChild);
+            }
+        }
+        
+        function updateStatus(message, isError = false) {
             const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.style.background = type === 'error' ? '#ffebee' : 
-                                        type === 'scanning' ? '#e3f2fd' : '#e8f5e9';
-        }
-        
-        function addToOutput(message) {
-            const output = document.getElementById('output');
-            const timestamp = new Date().toLocaleTimeString();
-            const line = document.createElement('div');
-            line.className = 'data-line';
-            line.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
-            
-            // Add to top (newest first)
-            if (output.firstChild) {
-                output.insertBefore(line, output.firstChild);
-            } else {
-                output.appendChild(line);
-            }
-            
-            // Keep only last 50 lines
-            while (output.children.length > 50) {
-                output.removeChild(output.lastChild);
-            }
-        }
-        
-        function clearOutput() {
-            document.getElementById('output').innerHTML = '';
-            advertisementCount = 0;
+            statusDiv.innerHTML = message;
+            statusDiv.style.background = isError ? '#ffebee' : '#e3f2fd';
+            statusDiv.style.color = isError ? '#c62828' : '#1565c0';
         }
         
         async function startScan() {
             try {
-                updateStatus('Scanning... Please select ESP32-Beacon from the list', 'scanning');
-                document.getElementById('scanBtn').disabled = true;
+                updateStatus('Requesting BLE device access...');
+                log('Starting scan for ESP32...');
+                
+                document.querySelector('button').disabled = true;
                 document.getElementById('stopBtn').disabled = false;
-                document.getElementById('clearBtn').disabled = false;
                 
-                addToOutput('Starting BLE scan...');
+                // Check if browser supports Web Bluetooth
+                if (!navigator.bluetooth) {
+                    throw new Error('Web Bluetooth not supported in this browser. Try Chrome/Edge on desktop or Android.');
+                }
                 
-                // Request BLE device WITHOUT requesting any services
-                // This prevents pairing
-                selectedDevice = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { name: 'ESP32-Beacon' },  // Exact name match
-                        { namePrefix: 'ESP32' }     // Or any ESP32 device
-                    ],
-                    // Do NOT request any services - this prevents pairing
-                    optionalServices: []  // Empty array = no services requested
+                // Try to get the ESP32 device
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'ESP32-Beacon' }],
+                    optionalServices: []  // Empty = no connection, just advertisements
                 });
                 
-                addToOutput(`Connected to: <strong>${selectedDevice.name || 'Unknown'}</strong>`);
-                addToOutput(`Device ID: ${selectedDevice.id}`);
+                log(`Found device: ${device.name}`, 'success');
+                updateStatus(`Connected to ${device.name}. Receiving data...`);
                 
-                // Add event listener for advertisements
-                selectedDevice.addEventListener('advertisementreceived', handleAdvertisement);
+                // Setup advertisement listener
+                device.addEventListener('advertisementreceived', handleAdvertisement);
                 
-                // FIXED: The correct method is watchAdvertisements() with 's'
-                if (selectedDevice.watchAdvertisements) {
-                    await selectedDevice.watchAdvertisements(); // FIXED LINE
-                } else {
-                    throw new Error('watchAdvertisements() not supported in this browser');
+                // Check if browser supports watchAdvertisements
+                if (!device.watchAdvertisements) {
+                    log('Browser does not support watching advertisements directly.', 'error');
+                    log('Try enabling experimental Web Bluetooth features in Chrome flags.', 'error');
+                    throw new Error('watchAdvertisements not supported');
                 }
                 
-                updateStatus('Success! Now receiving advertisements from ESP32', 'info');
-                addToOutput('Now listening for advertisements...');
-                isScanning = true;
+                // Start watching advertisements
+                await device.watchAdvertisements();
+                log('Now receiving broadcast data from ESP32...', 'success');
                 
             } catch (error) {
-                // User cancelled or error occurred
                 if (error.name === 'NotFoundError') {
-                    updateStatus('No ESP32 device found. Make sure it\'s advertising.', 'error');
-                    addToOutput('Error: No ESP32 device found');
+                    log('ESP32 not found. Make sure:', 'error');
+                    log('1. ESP32 is powered on and advertising', 'error');
+                    log('2. Device name is "ESP32-Beacon"', 'error');
+                    log('3. ESP32 is within range', 'error');
+                    updateStatus('ESP32 not found. Check the log for details.', true);
                 } else if (error.name === 'SecurityError') {
-                    updateStatus('Permission denied. Please allow Bluetooth access.', 'error');
-                    addToOutput('Error: Bluetooth permission denied');
-                } else if (error.name === 'NotSupportedError') {
-                    updateStatus('Web Bluetooth not supported in this browser.', 'error');
-                    addToOutput('Error: Web Bluetooth not supported');
+                    log('Permission denied. Please allow Bluetooth access.', 'error');
+                    updateStatus('Permission denied. Please allow Bluetooth.', true);
+                } else if (error.message.includes('watchAdvertisements')) {
+                    log('Browser limitation detected.', 'error');
+                    log('For Chrome Desktop:', 'error');
+                    log('1. Go to: chrome://flags/#enable-experimental-web-platform-features', 'error');
+                    log('2. Enable the flag and restart Chrome', 'error');
+                    updateStatus('Enable experimental features in Chrome flags.', true);
                 } else {
-                    updateStatus(`Error: ${error.message || error}`, 'error');
-                    addToOutput(`Error: ${error.message || error}`);
+                    log(`Error: ${error.message}`, 'error');
+                    updateStatus(`Error: ${error.message}`, true);
                 }
                 
-                document.getElementById('scanBtn').disabled = false;
+                document.querySelector('button').disabled = false;
                 document.getElementById('stopBtn').disabled = true;
-                isScanning = false;
             }
         }
         
@@ -169,73 +172,52 @@
             advertisementCount++;
             
             // Update status with count
-            updateStatus(`Receiving data... (${advertisementCount} ads received)`, 'scanning');
+            updateStatus(`Receiving data... (${advertisementCount} packets received)`);
             
-            let message = `Advertisement #${advertisementCount}: `;
-            message += `RSSI: <span class="rssi">${event.rssi}dBm</span>`;
+            let logMessage = `Packet #${advertisementCount}: RSSI: ${event.rssi}dBm`;
             
+            // Display manufacturer data
             if (event.manufacturerData && event.manufacturerData.size > 0) {
-                message += '<br>Manufacturer Data: ';
-                
-                event.manufacturerData.forEach((dataArray, manufacturerId) => {
+                event.manufacturerData.forEach((data, manufacturerId) => {
                     // Convert to hex string
                     let hexStr = '';
-                    let asciiStr = '';
-                    
-                    for (let i = 0; i < dataArray.byteLength; i++) {
-                        const byte = dataArray.getUint8(i);
-                        hexStr += ('0' + byte.toString(16)).slice(-2) + ' ';
-                        
-                        // Also show ASCII if printable
-                        if (byte >= 32 && byte <= 126) {
-                            asciiStr += String.fromCharCode(byte);
-                        } else {
-                            asciiStr += '.';
-                        }
+                    for (let i = 0; i < data.byteLength; i++) {
+                        hexStr += ('0' + data.getUint8(i).toString(16)).slice(-2) + ' ';
                     }
                     
-                    message += `<br>  ID: 0x${manufacturerId.toString(16).toUpperCase()}`;
-                    message += `<br>  Hex: <span class="hex-data">${hexStr}</span>`;
-                    message += `<br>  ASCII: ${asciiStr}`;
+                    logMessage += ` | Data: ${hexStr}`;
                     
-                    // Try to decode our specific format
-                    if (dataArray.byteLength >= 12) {
+                    // Try to decode as temperature/humidity
+                    if (data.byteLength >= 12) {
                         try {
-                            const view = new DataView(dataArray.buffer);
-                            const manufacturerId = view.getUint16(0, true);
-                            const deviceType = view.getUint8(2);
-                            const version = view.getUint8(3);
+                            const view = new DataView(data.buffer);
                             const counter = view.getUint32(4, true);
                             const temperature = view.getInt16(8, true) / 10.0;
                             const humidity = view.getUint8(10);
-                            const status = view.getUint8(11);
                             
-                            message += `<br>  Decoded: Counter=${counter}, Temp=${temperature.toFixed(1)}°C, Humidity=${humidity}%`;
+                            logMessage += ` | Decoded: Temp=${temperature.toFixed(1)}°C, Humidity=${humidity}%`;
                         } catch (e) {
-                            // Not our format, skip
+                            // Ignore if can't decode
                         }
                     }
                 });
             }
             
-            addToOutput(message);
+            log(logMessage);
         }
         
         function stopScan() {
-            if (selectedDevice) {
-                // Stop watching advertisements
-                if (selectedDevice.unwatchAdvertisements) {
-                    selectedDevice.unwatchAdvertisements();
+            if (device) {
+                if (device.unwatchAdvertisements) {
+                    device.unwatchAdvertisements();
                 }
-                selectedDevice.removeEventListener('advertisementreceived', handleAdvertisement);
-                
-                addToOutput('Scan stopped.');
-                updateStatus('Scan stopped', 'info');
+                device.removeEventListener('advertisementreceived', handleAdvertisement);
+                log('Stopped receiving data.', 'info');
             }
             
-            document.getElementById('scanBtn').disabled = false;
+            document.querySelector('button').disabled = false;
             document.getElementById('stopBtn').disabled = true;
-            isScanning = false;
+            updateStatus('Ready to scan again.');
         }
     </script>
 </body>
