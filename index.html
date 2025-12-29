@@ -232,6 +232,11 @@
         }
         
         function displayDeviceData(deviceId, deviceName, value) {
+            // Make sure device exists
+            if (!devices[deviceId]) {
+                devices[deviceId] = { dataCount: 0 };
+            }
+            
             devices[deviceId].dataCount++;
             
             let hexStr = '';
