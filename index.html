@@ -183,25 +183,29 @@
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
                 
-                const initialValue = await characteristic.readValue();
-                displayDeviceData(deviceId, device.name, initialValue);
-                
-                // Setup notifications
-                await characteristic.startNotifications();
-                characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                    displayDeviceData(deviceId, device.name, event.target.value);
-                });
-                
-                // Update status
-                updateDeviceStatus(deviceId, device.name, true);
-                
-                // Store device info
+                // Store device info FIRST
                 devices[deviceId] = {
                     device: device,
                     characteristic: characteristic,
                     dataCount: 0
                 };
                 
+                // Setup notifications BEFORE reading to avoid race condition
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                    displayDeviceData(deviceId, device.name, event.target.value);
+                });
+                
+                // Read initial value after setting up listener
+                try {
+                    const initialValue = await characteristic.readValue();
+                    displayDeviceData(deviceId, device.name, initialValue);
+                } catch (readError) {
+                    logDevice(deviceId, 'First read skipped, waiting for notifications...', 'info');
+                }
+                
+                // Update status
+                updateDeviceStatus(deviceId, device.name, true);
                 logDevice(deviceId, 'Connected successfully!', 'success');
                 
                 // Handle disconnection
