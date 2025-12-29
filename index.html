@@ -130,8 +130,8 @@
     </div>
 
     <script>
-        const SERVICE_UUID = "12345678-1234-5678-1234-567890abcdef";
-        const CHARACTERISTIC_UUID = "87654321-4321-8765-4321-fedcba987654";
+        const SERVICE_UUID = "0000180a-0000-1000-8000-00805f9b34fb";
+        const CHARACTERISTIC_UUID = "00002a29-0000-1000-8000-00805f9b34fb";
         
         let devices = {};
         let deviceCount = 0;
@@ -183,29 +183,25 @@
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
                 
-                // Store device info FIRST
+                const initialValue = await characteristic.readValue();
+                displayDeviceData(deviceId, device.name, initialValue);
+                
+                // Setup notifications
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                    displayDeviceData(deviceId, device.name, event.target.value);
+                });
+                
+                // Update status
+                updateDeviceStatus(deviceId, device.name, true);
+                
+                // Store device info
                 devices[deviceId] = {
                     device: device,
                     characteristic: characteristic,
                     dataCount: 0
                 };
                 
-                // Setup notifications BEFORE reading to avoid race condition
-                await characteristic.startNotifications();
-                characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                    displayDeviceData(deviceId, device.name, event.target.value);
-                });
-                
-                // Read initial value after setting up listener
-                try {
-                    const initialValue = await characteristic.readValue();
-                    displayDeviceData(deviceId, device.name, initialValue);
-                } catch (readError) {
-                    logDevice(deviceId, 'First read skipped, waiting for notifications...', 'info');
-                }
-                
-                // Update status
-                updateDeviceStatus(deviceId, device.name, true);
                 logDevice(deviceId, 'Connected successfully!', 'success');
                 
                 // Handle disconnection
