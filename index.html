@@ -1,859 +1,357 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 BLE Broadcast Receiver</title>
+    <title>ESP32 BLE Scanner</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f5f7fa;
+            font-family: Arial, sans-serif;
             padding: 20px;
-            max-width: 1200px;
+            max-width: 800px;
             margin: 0 auto;
         }
         
-        header {
-            background: linear-gradient(135deg, #2196F3, #1976D2);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
-        }
-        
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-        
-        .controls {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-        
         button {
-            padding: 14px 28px;
+            padding: 15px 25px;
+            margin: 10px;
             font-size: 16px;
-            font-weight: 600;
+            background: #2196F3;
+            color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 5px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .primary-btn {
-            background-color: #2196F3;
-            color: white;
-        }
-        
-        .primary-btn:hover {
-            background-color: #1976D2;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
-        }
-        
-        .secondary-btn {
-            background-color: #f44336;
-            color: white;
-        }
-        
-        .secondary-btn:hover {
-            background-color: #d32f2f;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
-        }
-        
-        .tertiary-btn {
-            background-color: #607d8b;
-            color: white;
-        }
-        
-        .tertiary-btn:hover {
-            background-color: #455a64;
-            transform: translateY(-2px);
         }
         
         button:disabled {
-            background-color: #cccccc;
+            background: #ccc;
             cursor: not-allowed;
-            transform: none !important;
-            box-shadow: none !important;
-        }
-        
-        .filter-section {
-            background: #f9f9f9;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 20px;
-        }
-        
-        .filter-row {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        
-        label {
-            font-weight: 600;
-            color: #555;
-        }
-        
-        input[type="text"] {
-            padding: 12px 16px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            flex-grow: 1;
-            max-width: 300px;
-            transition: border-color 0.3s;
-        }
-        
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #2196F3;
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 25px;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            text-align: center;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-        }
-        
-        .stat-value {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #2196F3;
-            margin: 10px 0;
-        }
-        
-        .stat-label {
-            color: #666;
-            font-size: 1rem;
         }
         
         #status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
             background: #e3f2fd;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 25px 0;
             border-left: 5px solid #2196F3;
-            font-size: 1.1rem;
-            transition: all 0.3s;
-        }
-        
-        .status-error {
-            background: #ffebee !important;
-            border-left-color: #f44336 !important;
-        }
-        
-        .log-container {
-            background: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-            margin-bottom: 30px;
-        }
-        
-        .log-header {
-            background: #f5f5f5;
-            padding: 20px;
-            border-bottom: 1px solid #e0e0e0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
         
         #log {
+            border: 1px solid #ccc;
+            padding: 15px;
             height: 500px;
             overflow-y: auto;
-            padding: 20px;
-            font-family: 'Courier New', monospace;
+            background: #f9f9f9;
+            font-family: monospace;
             font-size: 14px;
+            border-radius: 5px;
         }
         
         .log-entry {
-            padding: 15px;
-            margin-bottom: 12px;
-            border-radius: 8px;
-            background: #f9f9f9;
-            border-left: 4px solid #2196F3;
-            animation: fadeIn 0.3s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .log-time {
-            color: #666;
-            font-size: 12px;
-            margin-bottom: 5px;
-        }
-        
-        .log-content {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-        }
-        
-        .log-icon {
-            font-size: 18px;
-            flex-shrink: 0;
-        }
-        
-        .log-message {
-            flex-grow: 1;
-            word-break: break-word;
-        }
-        
-        .rssi-strong { color: #4CAF50; font-weight: bold; }
-        .rssi-medium { color: #FF9800; font-weight: bold; }
-        .rssi-weak { color: #f44336; font-weight: bold; }
-        
-        .device-info {
-            background: #e8f4fd;
-            padding: 12px;
-            border-radius: 6px;
-            margin: 10px 0;
-            border-left: 3px solid #2196F3;
-        }
-        
-        .data-section {
-            background: #f5f5f5;
-            padding: 12px;
-            border-radius: 6px;
-            margin: 10px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-        }
-        
-        .hex-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
+            padding: 8px;
             margin: 5px 0;
+            border-bottom: 1px solid #eee;
         }
         
-        .hex-byte {
-            padding: 2px 6px;
-            background: #e0e0e0;
-            border-radius: 3px;
-            font-family: 'Courier New', monospace;
+        .error {
+            color: #f00;
         }
         
-        .guide {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        .success {
+            color: #090;
         }
         
-        .guide-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
+        .device {
+            background: #e8f4fd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
         }
         
-        .guide-section {
-            background: #f9f9f9;
-            padding: 20px;
-            border-radius: 8px;
-        }
-        
-        .guide-section h4 {
-            margin-bottom: 15px;
-            color: #2196F3;
-        }
-        
-        .guide-section ul {
-            padding-left: 20px;
-        }
-        
-        .guide-section li {
-            margin-bottom: 8px;
-        }
-        
-        footer {
-            text-align: center;
-            margin-top: 40px;
-            padding: 20px;
-            color: #666;
-            font-size: 0.9rem;
-            border-top: 1px solid #e0e0e0;
-        }
-        
-        @media (max-width: 768px) {
-            .button-group {
-                flex-direction: column;
-            }
-            
-            button {
-                width: 100%;
-                justify-content: center;
-            }
-            
-            .filter-row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            input[type="text"] {
-                width: 100%;
-                max-width: 100%;
-            }
-            
-            h1 {
-                font-size: 2rem;
-            }
-        }
+        .rssi-good { color: #090; }
+        .rssi-medium { color: #f90; }
+        .rssi-weak { color: #f00; }
     </style>
 </head>
 <body>
-    <header>
-        <h1>📡 ESP32 BLE Broadcast Receiver</h1>
-        <p class="subtitle">Receive data from ESP32 BLE devices without pairing or connection</p>
-    </header>
+    <h1>ESP32 BLE Scanner</h1>
+    <p>Scans for ESP32 BLE devices without connection</p>
     
-    <main>
-        <section class="controls">
-            <h2>Controls</h2>
-            <div class="button-group">
-                <button class="primary-btn" onclick="startScan()" id="startBtn">
-                    <span>▶</span> Start Scanning
-                </button>
-                <button class="secondary-btn" onclick="stopScan()" id="stopBtn" disabled>
-                    <span>⏸</span> Stop Scanning
-                </button>
-                <button class="tertiary-btn" onclick="clearLog()">
-                    <span>🗑</span> Clear Log
-                </button>
-            </div>
-            
-            <div class="filter-section">
-                <h3>Device Filter</h3>
-                <div class="filter-row">
-                    <label for="deviceFilter">Filter by name:</label>
-                    <input type="text" id="deviceFilter" placeholder="ESP32" value="ESP32">
-                    <button onclick="updateFilter()" style="padding: 10px 20px;">Update Filter</button>
-                    <button onclick="resetFilter()" style="padding: 10px 20px; background-color: #9e9e9e;">Reset</button>
-                </div>
-                <p style="margin-top: 10px; color: #666; font-size: 0.9rem;">
-                    Only devices containing this text in their name will be shown. Leave empty to show all devices.
-                </p>
-            </div>
-        </section>
-        
-        <section class="stats">
-            <div class="stat-card">
-                <div class="stat-label">Devices Found</div>
-                <div class="stat-value" id="deviceCount">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Packets Received</div>
-                <div class="stat-value" id="packetCount">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Scan Status</div>
-                <div class="stat-value" id="scanStatus" style="font-size: 1.8rem;">Idle</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Last RSSI</div>
-                <div class="stat-value" id="lastRssi">-</div>
-            </div>
-        </section>
-        
-        <div id="status">
-            <strong>Status:</strong> Ready to scan. Click "Start Scanning" to begin receiving BLE broadcasts.
+    <div>
+        <button id="startBtn" onclick="startScan()">Start Scan</button>
+        <button id="stopBtn" onclick="stopScan()" disabled>Stop Scan</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div id="status">
+        Ready. Click "Start Scan" to begin.
+    </div>
+    
+    <div style="margin: 15px 0;">
+        <label for="filter">Device name contains:</label>
+        <input type="text" id="filter" value="ESP32" style="padding: 5px; margin-left: 10px;">
+    </div>
+    
+    <div style="display: flex; gap: 20px; margin: 15px 0;">
+        <div style="flex: 1; background: #f0f0f0; padding: 10px; border-radius: 5px;">
+            <strong>Devices Found:</strong> <span id="deviceCount">0</span>
         </div>
-        
-        <section class="log-container">
-            <div class="log-header">
-                <h3>Received Data Log</h3>
-                <div style="font-size: 0.9rem; color: #666;">
-                    <span id="logCount">0</span> log entries
-                </div>
-            </div>
-            <div id="log">
-                <div class="log-entry">
-                    <div class="log-time">[System]</div>
-                    <div class="log-content">
-                        <div class="log-icon">ℹ️</div>
-                        <div class="log-message">Ready to receive BLE broadcast data. Click "Start Scanning" to begin.</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-        
-        <section class="guide">
-            <h3>Usage Guide & Information</h3>
-            <div class="guide-grid">
-                <div class="guide-section">
-                    <h4>RSSI Signal Strength</h4>
-                    <ul>
-                        <li><span class="rssi-strong">-30 to -50 dBm:</span> Excellent signal</li>
-                        <li><span class="rssi-medium">-50 to -70 dBm:</span> Good signal</li>
-                        <li><span class="rssi-weak">-70 to -90 dBm:</span> Weak signal</li>
-                        <li>Below -90 dBm: Very weak signal</li>
-                    </ul>
-                </div>
-                <div class="guide-section">
-                    <h4>Browser Compatibility</h4>
-                    <ul>
-                        <li>✅ Chrome 79+ (Desktop/Android)</li>
-                        <li>✅ Edge 79+</li>
-                        <li>✅ Opera 66+</li>
-                        <li>❌ Firefox (Not supported)</li>
-                        <li>❌ Safari (Limited support)</li>
-                    </ul>
-                </div>
-                <div class="guide-section">
-                    <h4>ESP32 Setup</h4>
-                    <ul>
-                        <li>Device name should contain "ESP32"</li>
-                        <li>Advertising interval: 100-1000ms recommended</li>
-                        <li>Include manufacturer data for custom payload</li>
-                        <li>Ensure ESP32 is powered and within range</li>
-                    </ul>
-                </div>
-                <div class="guide-section">
-                    <h4>Troubleshooting</h4>
-                    <ul>
-                        <li>Enable Chrome flag: <code>chrome://flags/#enable-experimental-web-platform-features</code></li>
-                        <li>Ensure Bluetooth is enabled on your computer</li>
-                        <li>Check browser console (F12) for errors</li>
-                        <li>ESP32 range: typically 10-30 meters</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-    </main>
+        <div style="flex: 1; background: #f0f0f0; padding: 10px; border-radius: 5px;">
+            <strong>Packets Received:</strong> <span id="packetCount">0</span>
+        </div>
+    </div>
     
-    <footer>
-        <p>ESP32 BLE Broadcast Receiver | Works with any ESP32 BLE device broadcasting advertisements</p>
-        <p style="margin-top: 10px; font-size: 0.8rem;">Refresh page if scanner stops responding</p>
-    </footer>
+    <h3>Scan Results:</h3>
+    <div id="log">
+        <div class="log-entry">No data received yet. Click "Start Scan" above.</div>
+    </div>
+    
+    <div style="margin-top: 20px; font-size: 13px; color: #666;">
+        <p><strong>Note:</strong> Requires Chrome 79+ on desktop or Chrome for Android.</p>
+        <p>Make sure Bluetooth is enabled on your computer and ESP32 is powered on.</p>
+    </div>
 
     <script>
-        // Global variables
-        let bleScanner = null;
-        let isScanning = false;
-        let advertisementCount = 0;
-        let foundDevices = new Set();
-        let deviceFilter = 'ESP32';
-        let lastRssi = null;
-        let logEntries = 0;
-
-        // Initialize from input field
-        document.getElementById('deviceFilter').value = deviceFilter;
-        updateLogCount();
-
-        // RSSI classification
-        function getRssiClass(rssi) {
-            if (rssi >= -50) return 'rssi-strong';
-            if (rssi >= -70) return 'rssi-medium';
-            return 'rssi-weak';
-        }
-
-        // Get RSSI description
-        function getRssiDescription(rssi) {
-            if (rssi >= -50) return 'Excellent';
-            if (rssi >= -70) return 'Good';
-            if (rssi >= -90) return 'Weak';
-            return 'Very Weak';
-        }
-
-        // Update filter from input
-        function updateFilter() {
-            deviceFilter = document.getElementById('deviceFilter').value.trim();
-            addLog(`Filter updated: ${deviceFilter || 'No filter (showing all devices)'}`, 'info');
-            updateStatus(`Filter: ${deviceFilter || 'All devices'}`);
-        }
-
-        // Reset filter
-        function resetFilter() {
-            deviceFilter = '';
-            document.getElementById('deviceFilter').value = '';
-            addLog('Filter reset - showing all devices', 'info');
-            updateStatus('Showing all BLE devices');
-        }
-
-        // Update log entry count
-        function updateLogCount() {
-            document.getElementById('logCount').textContent = logEntries;
-        }
-
-        // Add log entry
-        function addLog(message, type = 'info', rssi = null, deviceData = null) {
+        // Simple logging function
+        function log(msg, type = 'info') {
             const logDiv = document.getElementById('log');
-            logEntries++;
-            updateLogCount();
-
-            // Remove initial placeholder if present
-            if (logDiv.children.length === 1 && 
-                logDiv.children[0].querySelector('.log-message').textContent.includes('Ready to receive')) {
-                logDiv.innerHTML = '';
-            }
-
             const entry = document.createElement('div');
             entry.className = 'log-entry';
             
             const time = new Date().toLocaleTimeString();
+            let prefix = 'ℹ️';
+            if (type === 'error') prefix = '❌';
+            else if (type === 'success') prefix = '✅';
+            else if (type === 'device') prefix = '📱';
             
-            let icon = '📡';
-            if (type === 'error') icon = '❌';
-            else if (type === 'success') icon = '✅';
-            else if (type === 'warning') icon = '⚠️';
-            else if (type === 'device') icon = '📱';
-
-            // Format the message
-            let formattedMessage = '';
+            entry.innerHTML = `<span style="color: #666;">[${time}]</span> ${prefix} ${msg}`;
             
-            if (deviceData) {
-                // Format as device data
-                const rssiClass = getRssiClass(deviceData.rssi);
-                const rssiDesc = getRssiDescription(deviceData.rssi);
-                
-                formattedMessage = `
-                    <div class="device-info">
-                        <strong>${deviceData.name}</strong><br>
-                        RSSI: <span class="${rssiClass}">${deviceData.rssi}dBm (${rssiDesc})</span>
-                        ${deviceData.txPower ? ` | TX Power: ${deviceData.txPower}dBm` : ''}
-                    </div>
-                `;
-                
-                if (deviceData.manufacturerData) {
-                    formattedMessage += `<div class="data-section">`;
-                    formattedMessage += `<div><strong>Manufacturer Data:</strong></div>`;
-                    
-                    deviceData.manufacturerData.forEach((data, manuId) => {
-                        const manuIdHex = manuId.toString(16).toUpperCase().padStart(4, '0');
-                        formattedMessage += `<div>ID: 0x${manuIdHex}</div>`;
-                        
-                        // Hex display
-                        let hexStr = '';
-                        let asciiStr = '';
-                        for (let i = 0; i < data.byteLength; i++) {
-                            const byte = data.getUint8(i);
-                            hexStr += byte.toString(16).padStart(2, '0').toUpperCase() + ' ';
-                            
-                            if (byte >= 32 && byte <= 126) {
-                                asciiStr += String.fromCharCode(byte);
-                            } else {
-                                asciiStr += '.';
-                            }
-                        }
-                        
-                        formattedMessage += `<div>Hex: ${hexStr.trim()}</div>`;
-                        formattedMessage += `<div>ASCII: ${asciiStr}</div>`;
-                    });
-                    
-                    formattedMessage += `</div>`;
-                }
-                
-                if (deviceData.serviceData) {
-                    formattedMessage += `<div class="data-section">`;
-                    formattedMessage += `<div><strong>Service Data:</strong></div>`;
-                    
-                    deviceData.serviceData.forEach((data, uuid) => {
-                        formattedMessage += `<div>UUID: ${uuid}</div>`;
-                        
-                        let hexStr = '';
-                        for (let i = 0; i < data.byteLength; i++) {
-                            hexStr += data.getUint8(i).toString(16).padStart(2, '0').toUpperCase() + ' ';
-                        }
-                        
-                        formattedMessage += `<div>Data: ${hexStr.trim()}</div>`;
-                    });
-                    
-                    formattedMessage += `</div>`;
-                }
-                
-                // Add packet number
-                formattedMessage += `<div style="font-size: 0.8rem; color: #666; margin-top: 5px;">Packet #${advertisementCount}</div>`;
-                
-            } else {
-                // Regular log message
-                if (rssi !== null) {
-                    const rssiClass = getRssiClass(rssi);
-                    formattedMessage = `<span class="${rssiClass}">${message}</span>`;
-                } else {
-                    formattedMessage = message;
-                }
+            // Remove placeholder if present
+            if (logDiv.children.length === 1 && logDiv.children[0].textContent.includes('No data')) {
+                logDiv.innerHTML = '';
             }
-            
-            entry.innerHTML = `
-                <div class="log-time">[${time}]</div>
-                <div class="log-content">
-                    <div class="log-icon">${icon}</div>
-                    <div class="log-message">${formattedMessage}</div>
-                </div>
-            `;
             
             logDiv.prepend(entry);
             
-            // Keep only last 100 entries
-            while (logDiv.children.length > 100) {
+            // Keep last 50 entries
+            while (logDiv.children.length > 50) {
                 logDiv.removeChild(logDiv.lastChild);
             }
         }
-
+        
+        // Update status
+        function updateStatus(msg, isError = false) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = msg;
+            statusDiv.style.background = isError ? '#ffebee' : '#e3f2fd';
+            statusDiv.style.borderLeftColor = isError ? '#f44336' : '#2196F3';
+        }
+        
         // Clear log
         function clearLog() {
-            document.getElementById('log').innerHTML = `
-                <div class="log-entry">
-                    <div class="log-time">[System]</div>
-                    <div class="log-content">
-                        <div class="log-icon">ℹ️</div>
-                        <div class="log-message">Log cleared. Ready to receive BLE broadcast data.</div>
-                    </div>
-                </div>
-            `;
-            logEntries = 1;
-            updateLogCount();
-            addLog('Log cleared', 'info');
+            document.getElementById('log').innerHTML = '<div class="log-entry">Log cleared.</div>';
+            log('Log cleared');
         }
-
-        // Update status
-        function updateStatus(message, isError = false) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = `<strong>Status:</strong> ${message}`;
-            
-            if (isError) {
-                statusDiv.classList.add('status-error');
-            } else {
-                statusDiv.classList.remove('status-error');
-            }
-        }
-
-        // Update counters
+        
+        // Global variables
+        let scanner = null;
+        let isScanning = false;
+        let packetCount = 0;
+        let deviceCount = 0;
+        const devices = new Set();
+        
+        // Update counters display
         function updateCounters() {
-            document.getElementById('deviceCount').textContent = foundDevices.size;
-            document.getElementById('packetCount').textContent = advertisementCount;
-            document.getElementById('scanStatus').textContent = isScanning ? 'Active' : 'Idle';
-            
-            if (lastRssi !== null) {
-                const rssiClass = getRssiClass(lastRssi);
-                document.getElementById('lastRssi').innerHTML = `<span class="${rssiClass}">${lastRssi}dBm</span>`;
-            }
+            document.getElementById('deviceCount').textContent = devices.size;
+            document.getElementById('packetCount').textContent = packetCount;
         }
-
-        // Start BLE scanning
+        
+        // Get RSSI class for styling
+        function getRssiClass(rssi) {
+            if (rssi >= -50) return 'rssi-good';
+            if (rssi >= -70) return 'rssi-medium';
+            return 'rssi-weak';
+        }
+        
+        // Main scan function
         async function startScan() {
             if (isScanning) return;
             
             try {
-                updateStatus('Checking browser compatibility...');
-                addLog('Starting BLE scan for ESP32 broadcasts...', 'info');
+                log('Starting BLE scan...');
+                updateStatus('Requesting Bluetooth access...');
                 
-                // Enable/disable buttons
+                // Disable start button, enable stop button
                 document.getElementById('startBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = false;
-                document.getElementById('scanStatus').textContent = 'Starting...';
                 
-                // Check browser support
+                // Check for Web Bluetooth support
                 if (!navigator.bluetooth) {
-                    throw new Error('Web Bluetooth API not supported in this browser.');
+                    throw new Error('Web Bluetooth not supported. Use Chrome 79+ or Edge 79+.');
                 }
                 
+                // Check for BLE scanning support
                 if (!navigator.bluetooth.requestLEScan) {
-                    throw new Error('BLE scanning requires Chrome 79+ or Edge 79+. Please update your browser.');
+                    throw new Error('BLE scanning requires Chrome 79+ with experimental flag enabled.');
                 }
                 
-                updateStatus('Requesting Bluetooth permissions...');
+                // First request device to get permission (this is the key fix!)
+                // We need to request a device first to get Bluetooth permission
+                try {
+                    await navigator.bluetooth.requestDevice({
+                        filters: [],
+                        optionalServices: []
+                    });
+                } catch (e) {
+                    // This is expected - we're just using it to get permission
+                    log('Got Bluetooth permission', 'success');
+                }
                 
-                // Request Bluetooth permissions and start scan
-                bleScanner = await navigator.bluetooth.requestLEScan({
+                // Now start scanning
+                log('Starting BLE scanning...', 'success');
+                updateStatus('Scanning for BLE devices...');
+                
+                scanner = await navigator.bluetooth.requestLEScan({
                     acceptAllAdvertisements: true,
                     keepRepeatedDevices: true
                 });
                 
                 isScanning = true;
-                advertisementCount = 0;
-                foundDevices.clear();
+                packetCount = 0;
+                devices.clear();
                 updateCounters();
-                
-                updateStatus(`Scanning for BLE broadcasts... Filter: "${deviceFilter || 'All devices'}"`);
-                addLog('BLE scan started successfully!', 'success');
-                addLog(`Looking for devices containing: "${deviceFilter}"`, 'info');
                 
                 // Listen for advertisements
                 navigator.bluetooth.addEventListener('advertisementreceived', handleAdvertisement);
                 
+                log('BLE scan started successfully!', 'success');
+                updateStatus('Scanning... Found 0 devices');
+                
             } catch (error) {
-                console.error('BLE Error:', error);
+                console.error('Scan error:', error);
                 handleError(error);
             }
         }
-
+        
         // Handle received advertisement
         function handleAdvertisement(event) {
-            advertisementCount++;
+            packetCount++;
             
-            // Device information
             const deviceName = event.device.name || 'Unknown Device';
             const deviceId = event.device.id;
             const rssi = event.rssi;
-            const txPower = event.txPower;
             
-            // Store last RSSI for display
-            lastRssi = rssi;
+            // Update device count
+            if (!devices.has(deviceId)) {
+                devices.add(deviceId);
+                updateCounters();
+            }
             
-            // Update counters
-            foundDevices.add(deviceId);
-            updateCounters();
-            
-            // Apply filter if set
-            if (deviceFilter && !deviceName.toUpperCase().includes(deviceFilter.toUpperCase())) {
+            // Apply filter
+            const filterText = document.getElementById('filter').value.toUpperCase();
+            if (filterText && !deviceName.toUpperCase().includes(filterText)) {
                 return; // Skip devices not matching filter
             }
             
-            // Update status periodically
-            if (advertisementCount % 10 === 0) {
-                updateStatus(`Found ${foundDevices.size} devices, ${advertisementCount} packets`);
+            // Update status every 10 packets
+            if (packetCount % 10 === 0) {
+                updateStatus(`Scanning... Found ${devices.size} devices, ${packetCount} packets`);
             }
             
-            // Prepare device data object
-            const deviceData = {
-                name: deviceName,
-                rssi: rssi,
-                txPower: txPower,
-                manufacturerData: null,
-                serviceData: null
-            };
+            // Create log message
+            const rssiClass = getRssiClass(rssi);
+            let logMsg = `<div class="device">`;
+            logMsg += `<strong>${deviceName}</strong> `;
+            logMsg += `<span class="${rssiClass}">(${rssi} dBm)</span><br>`;
             
-            // Collect manufacturer data
+            // Add manufacturer data if available
             if (event.manufacturerData && event.manufacturerData.size > 0) {
-                deviceData.manufacturerData = new Map();
                 event.manufacturerData.forEach((data, manufacturerId) => {
-                    deviceData.manufacturerData.set(manufacturerId, data);
+                    const manuIdHex = manufacturerId.toString(16).toUpperCase().padStart(4, '0');
+                    logMsg += `Manufacturer: 0x${manuIdHex} `;
+                    
+                    // Convert to hex
+                    let hexStr = '';
+                    let asciiStr = '';
+                    for (let i = 0; i < data.byteLength; i++) {
+                        const byte = data.getUint8(i);
+                        hexStr += byte.toString(16).padStart(2, '0').toUpperCase() + ' ';
+                        
+                        if (byte >= 32 && byte <= 126) {
+                            asciiStr += String.fromCharCode(byte);
+                        } else {
+                            asciiStr += '.';
+                        }
+                    }
+                    
+                    logMsg += `Data: ${hexStr.trim()} (${asciiStr})<br>`;
                 });
             }
             
-            // Collect service data
-            if (event.serviceData && event.serviceData.size > 0) {
-                deviceData.serviceData = new Map();
-                event.serviceData.forEach((data, uuid) => {
-                    deviceData.serviceData.set(uuid, data);
-                });
-            }
+            logMsg += `</div>`;
             
-            // Log the device data
-            addLog('Device data received', 'device', rssi, deviceData);
+            log(logMsg, 'device');
         }
-
+        
         // Stop scanning
         function stopScan() {
-            if (bleScanner && isScanning) {
-                bleScanner.stop();
+            if (scanner && isScanning) {
+                scanner.stop();
                 navigator.bluetooth.removeEventListener('advertisementreceived', handleAdvertisement);
                 isScanning = false;
                 
-                addLog('BLE scan stopped.', 'info');
-                updateStatus(`Scan stopped. Found ${foundDevices.size} devices, ${advertisementCount} packets`);
+                log('Scan stopped.', 'info');
+                updateStatus(`Scan stopped. Found ${devices.size} devices, ${packetCount} packets`);
             }
             
-            // Enable/disable buttons
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
-            document.getElementById('scanStatus').textContent = 'Idle';
-            updateCounters();
         }
-
+        
         // Error handling
         function handleError(error) {
-            let errorMsg = error.message;
+            console.error('Error details:', error);
+            
+            let errorMsg = error.message || error.toString();
             
             if (error.name === 'SecurityError') {
-                errorMsg = 'Bluetooth permission denied. Please allow Bluetooth access in your browser.';
-            } else if (error.name === 'NotAllowedError') {
-                errorMsg = 'Bluetooth scanning not allowed by user or system.';
+                errorMsg = 'Bluetooth permission denied. Please allow access.';
             } else if (error.name === 'NotFoundError') {
-                errorMsg = 'No Bluetooth adapter found. Make sure Bluetooth is enabled on your device.';
+                errorMsg = 'No Bluetooth adapter found.';
             } else if (error.name === 'NotSupportedError') {
-                errorMsg = 'Bluetooth LE (Low Energy) is not supported on this device.';
+                errorMsg = 'Web Bluetooth not supported. Use Chrome 79+ or Edge 79+.';
+            } else if (error.name === 'NotAllowedError') {
+                errorMsg = 'Bluetooth scanning not allowed.';
             }
             
             // Special instructions for Chrome
-            if (error.message.includes('requestLEScan') || error.message.includes('not supported')) {
-                errorMsg = `
-                    BLE scanning requires Chrome 79+ or Edge 79+.<br><br>
-                    <strong>For Chrome Desktop:</strong><br>
-                    1. Go to: <code>chrome://flags/#enable-experimental-web-platform-features</code><br>
-                    2. Enable the flag<br>
-                    3. Restart Chrome<br><br>
-                    <strong>For Android:</strong> Use Chrome 79+ (no flags needed)
-                `;
+            if (error.message.includes('requestLEScan')) {
+                errorMsg += '<br><br><strong>For Chrome Desktop:</strong><br>';
+                errorMsg += '1. Go to: chrome://flags/#enable-experimental-web-platform-features<br>';
+                errorMsg += '2. Enable the flag<br>';
+                errorMsg += '3. Restart Chrome';
             }
             
             updateStatus(errorMsg, true);
-            addLog(`Error: ${error.message}`, 'error');
+            log(`Error: ${errorMsg}`, 'error');
             
-            // Reset buttons
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
-            document.getElementById('scanStatus').textContent = 'Error';
-            isScanning = false;
-            updateCounters();
         }
-
-        // Auto-stop when page is closed
+        
+        // Check browser support on load
+        window.addEventListener('load', function() {
+            if (!navigator.bluetooth) {
+                updateStatus('Web Bluetooth not supported in this browser. Use Chrome 79+ or Edge 79+.', true);
+                document.getElementById('startBtn').disabled = true;
+                log('Web Bluetooth API not supported.', 'error');
+            } else {
+                log('Browser supports Web Bluetooth. Ready to scan.');
+            }
+        });
+        
+        // Auto-stop on page unload
         window.addEventListener('beforeunload', function() {
             if (isScanning) {
                 stopScan();
-            }
-        });
-
-        // Check browser compatibility on load
-        window.addEventListener('load', function() {
-            if (!navigator.bluetooth) {
-                updateStatus('Web Bluetooth API not supported in this browser. Use Chrome 79+ or Edge 79+.', true);
-                document.getElementById('startBtn').disabled = true;
-                addLog('This browser does not support Web Bluetooth API.', 'error');
-            } else if (!navigator.bluetooth.requestLEScan) {
-                updateStatus('BLE scanning requires Chrome 79+ or Edge 79+. Please update your browser.', true);
-                document.getElementById('startBtn').disabled = true;
-                addLog('This browser does not support BLE scanning.', 'warning');
-            } else {
-                addLog('Browser compatibility check passed. Ready to scan.', 'success');
             }
         });
     </script>
