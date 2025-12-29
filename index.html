@@ -132,8 +132,12 @@
                 // Add event listener for advertisements
                 selectedDevice.addEventListener('advertisementreceived', handleAdvertisement);
                 
-                // IMPORTANT: Use watchAdvertisements() not watchAdvertisement()
-                await selectedDevice.watchAdvertisements();
+                // FIXED: The correct method is watchAdvertisements() with 's'
+                if (selectedDevice.watchAdvertisements) {
+                    await selectedDevice.watchAdvertisements(); // FIXED LINE
+                } else {
+                    throw new Error('watchAdvertisements() not supported in this browser');
+                }
                 
                 updateStatus('Success! Now receiving advertisements from ESP32', 'info');
                 addToOutput('Now listening for advertisements...');
@@ -220,7 +224,9 @@
         function stopScan() {
             if (selectedDevice) {
                 // Stop watching advertisements
-                selectedDevice.unwatchAdvertisements();
+                if (selectedDevice.unwatchAdvertisements) {
+                    selectedDevice.unwatchAdvertisements();
+                }
                 selectedDevice.removeEventListener('advertisementreceived', handleAdvertisement);
                 
                 addToOutput('Scan stopped.');
@@ -231,11 +237,6 @@
             document.getElementById('stopBtn').disabled = true;
             isScanning = false;
         }
-        
-        // Auto-start on page load (optional)
-        // window.addEventListener('load', function() {
-        //     setTimeout(startScan, 1000);
-        // });
     </script>
 </body>
 </html>
