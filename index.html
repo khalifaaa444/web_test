@@ -1,272 +1,126 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>ESP32 BLE Broadcast Receiver</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        button {
-            padding: 15px 30px;
-            margin: 10px;
-            font-size: 16px;
-            background: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        #log {
-            border: 1px solid #ccc;
-            padding: 15px;
-            margin-top: 20px;
-            height: 400px;
-            overflow-y: auto;
-            font-family: monospace;
-            background: #f9f9f9;
-        }
-        .entry {
-            margin: 5px 0;
-            padding: 5px;
-            border-bottom: 1px solid #eee;
-        }
-        .time {
-            color: #666;
-            font-size: 12px;
-        }
-        .data {
-            color: #2196F3;
-            font-weight: bold;
-        }
-        .error {
-            color: #f44336;
-        }
-        .success {
-            color: #4CAF50;
-        }
-        .rssi-strong { color: #4CAF50; }
-        .rssi-medium { color: #FF9800; }
-        .rssi-weak { color: #f44336; }
-    </style>
-</head>
-<body>
-    <h1>ESP32 BLE Broadcast Receiver</h1>
-    <p>Receives data from ESP32 without any connection/pairing.</p>
+let bleScanner = null;
+let isScanning = false;
+
+async function startScan() {
+    if (isScanning) return;
     
-    <button onclick="startScan()">Start Receiving Data</button>
-    <button onclick="stopScan()" id="stopBtn" disabled>Stop</button>
-    
-    <div id="status" style="margin: 15px 0; padding: 10px; background: #e3f2fd;">
-        Ready. Click "Start Receiving Data"
-    </div>
-    
-    <h3>Received Data:</h3>
-    <div id="log">
-        No data received yet...
-    </div>
-    
-    <div style="margin-top: 20px; font-size: 12px; color: #666;">
-        <h4>RSSI Guide:</h4>
-        <ul>
-            <li>-30 to -50 dBm: Excellent signal</li>
-            <li>-50 to -70 dBm: Good signal</li>
-            <li>-70 to -90 dBm: Weak signal</li>
-            <li>Below -90 dBm: Very weak</li>
-        </ul>
-    </div>
-    
-    <script>
-        let device = null;
-        let advertisementCount = 0;
-        let isScanning = false;
+    try {
+        updateStatus('Starting BLE scan...');
+        log('Scanning for BLE broadcasts...', 'info');
         
-        function getRssiClass(rssi) {
-            if (rssi >= -50) return 'rssi-strong';
-            if (rssi >= -70) return 'rssi-medium';
-            return 'rssi-weak';
+        document.querySelector('button').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        
+        // Check if browser supports BLE scanning
+        if (!navigator.bluetooth || !navigator.bluetooth.requestLEScan) {
+            throw new Error('BLE scanning not supported. Try Chrome 79+ on desktop/Android.');
         }
         
-        function log(message, type = 'info', rssi = null) {
-            const logDiv = document.getElementById('log');
-            const entry = document.createElement('div');
-            entry.className = 'entry';
-            
-            const time = new Date().toLocaleTimeString();
-            let icon = '📡';
-            if (type === 'error') icon = '❌';
-            else if (type === 'success') icon = '✅';
-            else if (type === 'warning') icon = '⚠️';
-            
-            let rssiClass = '';
-            if (rssi !== null) {
-                rssiClass = getRssiClass(rssi);
-            }
-            
-            entry.innerHTML = `
-                <span class="time">[${time}]</span> 
-                <span class="${type} ${rssiClass}">${icon} ${message}</span>
-            `;
-            
-            logDiv.prepend(entry);
-            
-            // Keep only last 50 entries
-            while (logDiv.children.length > 50) {
-                logDiv.removeChild(logDiv.lastChild);
-            }
-        }
+        // Start BLE scanning (no connection needed)
+        bleScanner = await navigator.bluetooth.requestLEScan({
+            acceptAllAdvertisements: true,  // Accept all BLE devices
+            keepRepeatedDevices: true       // Keep showing same devices
+        });
         
-        function updateStatus(message, isError = false) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = message;
-            statusDiv.style.background = isError ? '#ffebee' : '#e3f2fd';
-            statusDiv.style.color = isError ? '#c62828' : '#1565c0';
-        }
+        isScanning = true;
+        updateStatus('Scanning for BLE broadcasts...');
+        log('BLE scan started successfully!', 'success');
         
-        async function startScan() {
-            if (isScanning) return;
-            
-            try {
-                updateStatus('Requesting BLE device access...');
-                log('Starting scan for ESP32...');
-                
-                document.querySelector('button').disabled = true;
-                document.getElementById('stopBtn').disabled = false;
-                
-                // Check if browser supports Web Bluetooth
-                if (!navigator.bluetooth) {
-                    throw new Error('Web Bluetooth not supported in this browser. Try Chrome/Edge on desktop or Android.');
-                }
-                
-                // Request device with name filter
-                device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'ESP32-Beacon' }],
-                    optionalServices: []
-                });
-                
-                log(`Found device: ${device.name}`, 'success');
-                updateStatus(`Connected to ${device.name}. Receiving data...`);
-                
-                // Setup advertisement listener
-                device.addEventListener('advertisementreceived', handleAdvertisement);
-                
-                // Check if browser supports watchAdvertisements
-                if (!device.watchAdvertisements) {
-                    throw new Error('watchAdvertisements not supported. Enable experimental Web Bluetooth features.');
-                }
-                
-                // Start watching advertisements
-                await device.watchAdvertisements();
-                isScanning = true;
-                log('Now receiving broadcast data from ESP32...', 'success');
-                
-            } catch (error) {
-                console.error('Error:', error);
-                handleError(error);
-            }
-        }
+        // Listen for found devices
+        navigator.bluetooth.addEventListener('advertisementreceived', handleAdvertisement);
         
-        function handleAdvertisement(event) {
-            advertisementCount++;
+    } catch (error) {
+        console.error('Error:', error);
+        handleError(error);
+    }
+}
+
+function handleAdvertisement(event) {
+    // Device information
+    const deviceName = event.device.name || 'Unknown Device';
+    const rssi = event.rssi;
+    
+    // Only show ESP32 devices (adjust filter as needed)
+    if (!deviceName.includes('ESP32')) {
+        return; // Skip non-ESP32 devices
+    }
+    
+    // Update status
+    updateStatus(`Found: ${deviceName} (RSSI: ${rssi}dBm)`);
+    
+    // Log the device
+    let logMessage = `<span class="${getRssiClass(rssi)}">${deviceName} - RSSI: ${rssi}dBm</span>`;
+    
+    // Check for manufacturer data (ESP32 BLE beacons usually use this)
+    if (event.manufacturerData) {
+        event.manufacturerData.forEach((data, manufacturerId) => {
+            // Convert manufacturer ID to hex (ESP32 often uses 0xFFFF or 0x02E5)
+            const manuIdHex = manufacturerId.toString(16).toUpperCase().padStart(4, '0');
             
-            // Update status
-            updateStatus(`Receiving data... (${advertisementCount} packets received)`);
-            
-            // Basic info
-            let rssi = event.rssi;
-            let logMessage = `Packet #${advertisementCount}: <span class="${getRssiClass(rssi)}">RSSI: ${rssi}dBm</span>`;
-            
-            // Display manufacturer data if available
-            if (event.manufacturerData && event.manufacturerData.size > 0) {
-                event.manufacturerData.forEach((data, manufacturerId) => {
-                    // Convert manufacturer ID to hex
-                    const manuIdHex = manufacturerId.toString(16).toUpperCase().padStart(4, '0');
+            if (manuIdHex === '02E5' || manuIdHex === 'FFFF') { // Common ESP32 IDs
+                logMessage += ` | ESP32 Data: `;
+                
+                // Convert data to hex string
+                let hexStr = '';
+                let asciiStr = '';
+                
+                for (let i = 0; i < data.byteLength; i++) {
+                    const byte = data.getUint8(i);
+                    hexStr += byte.toString(16).padStart(2, '0').toUpperCase() + ' ';
                     
-                    // Convert data bytes to hex string
-                    let hexStr = '';
-                    let asciiStr = '';
-                    
-                    for (let i = 0; i < data.byteLength; i++) {
-                        const byte = data.getUint8(i);
-                        hexStr += byte.toString(16).padStart(2, '0').toUpperCase() + ' ';
-                        
-                        // ASCII representation (if printable)
-                        if (byte >= 32 && byte <= 126) {
-                            asciiStr += String.fromCharCode(byte);
-                        } else {
-                            asciiStr += '.';
-                        }
+                    // ASCII representation
+                    if (byte >= 32 && byte <= 126) {
+                        asciiStr += String.fromCharCode(byte);
+                    } else {
+                        asciiStr += '.';
                     }
-                    
-                    logMessage += ` | ManuID: 0x${manuIdHex}`;
-                    logMessage += ` | Hex: ${hexStr}`;
-                    logMessage += ` | ASCII: ${asciiStr}`;
-                    
-                    // Try to parse as test data
-                    if (data.byteLength === 6) {
-                        const view = new DataView(data.buffer);
-                        const byte1 = view.getUint8(0);
-                        const byte2 = view.getUint8(1);
-                        const char1 = String.fromCharCode(view.getUint8(2));
-                        const char2 = String.fromCharCode(view.getUint8(3));
-                        const char3 = String.fromCharCode(view.getUint8(4));
-                        const char4 = String.fromCharCode(view.getUint8(5));
-                        
-                        logMessage += ` | Parsed: ${byte1}, ${byte2}, "${char1}${char2}${char3}${char4}"`;
-                    }
-                });
-            } else {
-                logMessage += ' | No manufacturer data';
-            }
-            
-            // Log with RSSI for styling
-            log(logMessage, 'info', rssi);
-        }
-        
-        function handleError(error) {
-            let errorMsg = error.message;
-            
-            if (error.name === 'NotFoundError') {
-                errorMsg = 'ESP32 not found. Make sure:<br>' +
-                          '1. ESP32 is powered on and advertising<br>' +
-                          '2. Device name is "ESP32-Beacon"<br>' +
-                          '3. ESP32 is within range';
-                log(errorMsg, 'error');
-            } else if (error.name === 'SecurityError') {
-                errorMsg = 'Permission denied. Please allow Bluetooth access.';
-                log(errorMsg, 'error');
-            } else if (error.message.includes('watchAdvertisements')) {
-                errorMsg = 'Browser limitation detected.<br>' +
-                          'For Chrome Desktop:<br>' +
-                          '1. Go to: chrome://flags/#enable-experimental-web-platform-features<br>' +
-                          '2. Enable the flag and restart Chrome';
-                log(errorMsg, 'error');
-            } else {
-                log(`Error: ${error.message}`, 'error');
-            }
-            
-            updateStatus(errorMsg, true);
-            document.querySelector('button').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-            isScanning = false;
-        }
-        
-        function stopScan() {
-            if (device && isScanning) {
-                if (device.unwatchAdvertisements) {
-                    device.unwatchAdvertisements();
                 }
-                device.removeEventListener('advertisementreceived', handleAdvertisement);
-                log('Stopped receiving data.', 'info');
-                isScanning = false;
+                
+                logMessage += `Hex: ${hexStr.trim()} | ASCII: ${asciiStr}`;
             }
-            
-            document.querySelector('button').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-            updateStatus('Ready to scan again.');
-        }
-    </script>
-</body>
-</html>
+        });
+    }
+    
+    // Log service data if present
+    if (event.serviceData && event.serviceData.size > 0) {
+        event.serviceData.forEach((data, uuid) => {
+            logMessage += ` | Service: ${uuid}`;
+        });
+    }
+    
+    log(logMessage, 'info', rssi);
+}
+
+function stopScan() {
+    if (bleScanner && isScanning) {
+        bleScanner.stop();
+        navigator.bluetooth.removeEventListener('advertisementreceived', handleAdvertisement);
+        log('BLE scan stopped.', 'info');
+        isScanning = false;
+    }
+    
+    document.querySelector('button').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+    updateStatus('Ready to scan again.');
+}
+
+// Update error handling
+function handleError(error) {
+    let errorMsg = error.message;
+    
+    if (error.name === 'SecurityError') {
+        errorMsg = 'Bluetooth permission denied. Please allow access.';
+    } else if (error.name === 'NotAllowedError') {
+        errorMsg = 'Bluetooth scanning not allowed.';
+    } else if (error.message.includes('requestLEScan')) {
+        errorMsg = 'BLE scanning not supported in this browser.<br>' +
+                  'Try Chrome 79+ on desktop or Android.';
+    }
+    
+    updateStatus(errorMsg, true);
+    log(errorMsg, 'error');
+    
+    document.querySelector('button').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+    isScanning = false;
+}
